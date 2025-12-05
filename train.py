@@ -1,8 +1,6 @@
 import sys
 import os
-# 设置环境变量以支持中文路径
 os.environ['PYTHONIOENCODING'] = 'utf-8'
-# 添加项目根目录到Python路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
@@ -18,28 +16,25 @@ import joblib
 import seaborn as sns
 import numpy as np
 
-# 设置中文字体
 plt.rcParams['font.family'] = 'SimHei'
 plt.rcParams['font.size'] = 15
 
 
 class PowerLoadModel:
     def __init__(self):
-        # 拼接日志文件名
-        logfile_name = 'train_' + datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-        # 创建日志对象
-        self.logfile = Logger('../', logfile_name).get_logger()
-        # 测试一条日志
-        self.logfile.info('开始创建 电力负荷模型的对象')
-        # 获取数据
-        self.data_source = data_preprocessing()
-        # 初始化模型
-        self.model = None
 
+        logfile_name = 'train_' + datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+
+        self.logfile = Logger('../', logfile_name).get_logger()
+
+        self.logfile.info('开始创建 电力负荷模型的对象')
+  
+        self.data_source = data_preprocessing()
+
+        self.model = None
+#准备特征工程
     def prepare_features(self, data):
-        """
-        准备特征数据 - 平衡版特征工程（兼顾效率和峰值预测能力）
-        """
+
         # self.logfile.info('开始准备特征数据')
         
         # 确保 time 列为 datetime 类型
@@ -80,12 +75,12 @@ class PowerLoadModel:
                 return 4  # 凌晨
         data['time_period'] = data['hour'].apply(get_time_period)
         
-        # 添加滞后特征（历史负荷）- 最重要的特征
-        data['load_lag1'] = data['power_load'].shift(1)      # 上一小时负荷
-        data['load_lag24'] = data['power_load'].shift(24)    # 上一天同一小时负荷
-        data['load_lag168'] = data['power_load'].shift(168)  # 上一周同一小时负荷
+        # 滞后特征（这里没用）
+        # data['load_lag1'] = data['power_load'].shift(1)      # 上一小时负荷
+        # data['load_lag24'] = data['power_load'].shift(24)    # 上一天同一小时负荷
+        # data['load_lag168'] = data['power_load'].shift(168)  # 上一周同一小时负荷
         
-        # 关键：添加负荷变化率特征（提高突发峰值预测能力）
+        # 负荷变化率特征
         data['load_change_rate'] = data['power_load'].pct_change(1)  # 相比于前一小时的变化率
         data['load_change_rate_24h'] = data['power_load'].pct_change(24)  # 相比于前一天的变化率
         
@@ -93,12 +88,7 @@ class PowerLoadModel:
         original_length = len(data)
         data = data.dropna().reset_index(drop=True)
         new_length = len(data)
-        
-        if new_length < original_length:
-            self.logfile.info(f'特征工程后数据量从{original_length}减少到{new_length}')
-            print(f'特征工程后数据量从{original_length}减少到{new_length}')
-        
-        # 添加历史同期特征（往年同月同日同时刻负荷）
+
         def get_historical_same_period(row, data_df):
             target_month = row['month']
             target_day = row['day']
@@ -126,7 +116,8 @@ class PowerLoadModel:
         # 选择平衡后的特征列
         feature_columns = [
             'hour', 'weekday', 'month', 'season', 'is_weekend', 'time_period',
-            'load_lag1', 'load_lag24', 'load_lag168', 'load_same_period_last_year',
+            # 'load_lag1', 'load_lag24', 'load_lag168', 
+            'load_same_period_last_year',
             'load_change_rate', 'load_change_rate_24h'  # 关键的峰值预测特征
         ]
         
@@ -142,7 +133,7 @@ class PowerLoadModel:
 
         self.logfile.info('加载测试数据')
         # 使用绝对路径加载测试数据
-        test_file_path = os.path.join(project_root, 'data', 'test.csv')
+        test_file_path = os.path.join(project_root, 'data', 'train.csv')
         if not os.path.exists(test_file_path):
             self.logfile.error(f'测试数据文件不存在: {test_file_path}')
             return None
@@ -185,14 +176,14 @@ class PowerLoadModel:
         
         # 调整参数以提高模型性能
         param_grid = {
-            'n_estimators': [200, 300],  # 增加树的数量
-            'max_depth': [6, 8, 10],     # 增加树的深度
-            'learning_rate': [0.1, 0.15, 0.2],  # 提高学习率
-            'subsample': [0.8, 0.9, 1.0],       # 增加样本采样比例
-            'colsample_bytree': [0.8, 0.9, 1.0],# 增加特征采样比例
-            'reg_alpha': [0, 0.01, 0.1],        # L1正则化
-            'reg_lambda': [0, 0.01, 0.1],       # L2正则化
-            'min_child_weight': [1, 3, 5]       # 最小叶子节点权重
+            'n_estimators': [100, 200],  # 增加树的数量
+            'max_depth': [3,5],     # 增加树的深度
+            'learning_rate': [0.1, 0.15],  # 提高学习率
+            'subsample': [0.8, 0.9],       # 增加样本采样比例
+            'colsample_bytree': [0.8, 0.9],# 增加特征采样比例
+            'reg_alpha': [0, 0.01],        # L1正则化
+            'reg_lambda': [0, 0.01],       # L2正则化
+            'min_child_weight': [1, 3]       # 最小叶子节点权重
         }
         
         # 创建XGBoost回归器
@@ -237,7 +228,10 @@ class PowerLoadModel:
         
         # 特征重要性分析
         self.analyze_feature_importance(X_train.columns)
-        
+        # print('输出y_test')
+        # print(y_test)
+        # print('输出y_test_pred')
+        # print(y_test_pred)
         return self.model
 
     def visualize_predictions(self, y_true, y_pred, title_suffix=""):
@@ -325,8 +319,6 @@ class PowerLoadModel:
             'time_period': self._get_time_period(hour)
         }
 
-        print(f"预测 {year}-{month:02d}-{day:02d} {hour:02d}:00 的电力负荷")
-        print("注意：此预测为简化版本，实际应用需要完整的历史数据来构造特征")
         return features
     
     def _get_season(self, month):
@@ -441,32 +433,30 @@ def visualize_time_features(data):
 
     return data
 
-
-def plot_time_heatmap(data):
-    """
-    绘制时间特征热力图
-    """
-    # 确保必要的时间特征存在
-    if 'hour' not in data.columns or 'weekday' not in data.columns:
-        data['time'] = pd.to_datetime(data['time'])
-        data['hour'] = data['time'].dt.hour
-        data['weekday'] = data['time'].dt.weekday
-
-    # 创建透视表
-    pivot_data = data.pivot_table(
-        values='power_load',
-        index='weekday',
-        columns='hour',
-        aggfunc='mean'
-    )
-
-    plt.figure(figsize=(12, 8))
-    sns.heatmap(pivot_data, annot=False, cmap='YlOrRd', cbar_kws={'label': '负荷(MW)'})
-    plt.title('小时-星期负荷热力图')
-    plt.xlabel('小时')
-    plt.ylabel('星期几(0=周一)')
-    plt.savefig('picture/hour_weekday_heatmap.png', dpi=300, bbox_inches='tight')
-    plt.show()
+# 这是热力图，但是没卵用
+# def plot_time_heatmap(data):
+#
+#     # 确保必要的时间特征存在
+#     if 'hour' not in data.columns or 'weekday' not in data.columns:
+#         data['time'] = pd.to_datetime(data['time'])
+#         data['hour'] = data['time'].dt.hour
+#         data['weekday'] = data['time'].dt.weekday
+#
+#     # 创建透视表
+#     pivot_data = data.pivot_table(
+#         values='power_load',
+#         index='weekday',
+#         columns='hour',
+#         aggfunc='mean'
+#     )
+#
+#     plt.figure(figsize=(12, 8))
+#     sns.heatmap(pivot_data, annot=False, cmap='YlOrRd', cbar_kws={'label': '负荷(MW)'})
+#     plt.title('小时-星期负荷热力图')
+#     plt.xlabel('小时')
+#     plt.ylabel('星期几(0=周一)')
+#     plt.savefig('picture/hour_weekday_heatmap.png', dpi=300, bbox_inches='tight')
+#     plt.show()
 
 #分析时间特征与负荷的相关性
 def analyze_time_correlations(data):
@@ -522,9 +512,9 @@ if __name__ == '__main__':
     pm = PowerLoadModel()
 
     # 进行时间特征分析
-    # data_with_features = visualize_time_features(pm.data_source.copy())
+    data_with_features = visualize_time_features(pm.data_source.copy())
     # plot_time_heatmap(data_with_features)
-    # correlation_data = analyze_time_correlations(data_with_features)
+    correlation_data = analyze_time_correlations(data_with_features)
     
     # 准备特征和标签
     X, y, processed_data = pm.prepare_features(pm.data_source.copy())
@@ -534,7 +524,3 @@ if __name__ == '__main__':
     
     # 保存模型
     pm.save_model() 
-    
-    # 演示预测功能
-    print("\n=== 预测演示 ===")
-    pm.predict_load(2025, 8, 15, 14)  # 预测2025年8月15日14时的负荷
