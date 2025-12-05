@@ -27,17 +27,13 @@ class PowerLoadModel:
 
         self.logfile = Logger('../', logfile_name).get_logger()
 
-        self.logfile.info('开始创建 电力负荷模型的对象')
   
         self.data_source = data_preprocessing()
 
         self.model = None
 #准备特征工程
     def prepare_features(self, data):
-
-        # self.logfile.info('开始准备特征数据')
         
-        # 确保 time 列为 datetime 类型
         data['time'] = pd.to_datetime(data['time'])
         
         # 按时间排序
@@ -84,11 +80,6 @@ class PowerLoadModel:
         data['load_change_rate'] = data['power_load'].pct_change(1)  # 相比于前一小时的变化率
         data['load_change_rate_24h'] = data['power_load'].pct_change(24)  # 相比于前一天的变化率
         
-        # 删除包含NaN的行（由于滞后特征产生）
-        original_length = len(data)
-        data = data.dropna().reset_index(drop=True)
-        new_length = len(data)
-
         def get_historical_same_period(row, data_df):
             target_month = row['month']
             target_day = row['day']
@@ -110,9 +101,6 @@ class PowerLoadModel:
                 # 如果没有找到历史同期数据，返回全局平均值
                 return data_df['power_load'].mean()
                 
-        # 计算历史同期特征（在删除NaN之后计算）
-        data['load_same_period_last_year'] = data.apply(lambda row: get_historical_same_period(row, data), axis=1)
-        
         # 选择平衡后的特征列
         feature_columns = [
             'hour', 'weekday', 'month', 'season', 'is_weekend', 'time_period',
@@ -524,3 +512,4 @@ if __name__ == '__main__':
     
     # 保存模型
     pm.save_model() 
+
